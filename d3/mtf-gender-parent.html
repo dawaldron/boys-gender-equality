@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en-US" prefix="og: http://ogp.me/ns# fb: http://ogp.me/ns/fb#">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no">
+
+<!-- custom css -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div style="padding:30px">
+    <div id="logo"></div>
+    <div id="chart4-container"></div>
+    <div id="bar3-container"></div>
+    <div id="bar-container"></div>
+    <div id="bar2-container"></div>
+  </div>
+  
+  <!-- scripts -->
+  <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
+  <script>
+  
+  var parseTime = d3.timeParse("%Y-%m-%d");
+  
+  var tooltip = d3.select("body")
+    .append("div")
+    .attr("class", "d3-tip")
+    .style("opacity", 0)
+    .style("pointer-events", "none")
+    .on("click", function() {
+      d3.select(this)
+        .style("opacity", 0)
+        .style("pointer-events", "none");
+    });
+  
+  d3.selection.prototype.first = function() {
+    return d3.select(this.nodes()[0][0]);
+  };
+  
+  d3.selection.prototype.last = function() {
+    return d3.select(this.nodes()[this.size() - 1]);
+  };
+  
+  function wrap(text, width) {
+    text.each(function () {
+        var text = d3.select(this),
+            words = text.text().split(/\s+/).reverse(),
+            word,
+            line = [],
+            lineNumber = 0,
+            lineHeight = 1.3, // ems
+            x = text.attr("x"),
+            y = text.attr("y"),
+            dy = 0, //parseFloat(text.attr("dy")),
+            tspan = text.text(null)
+                        .append("tspan")
+                        .attr("x", x)
+                        .attr("y", y)
+        while (word = words.pop()) {
+            line.push(word);
+            tspan.text(line.join(" "));
+            if (tspan.node().getComputedTextLength() > width) {
+                line.pop();
+                tspan.text(line.join(" "));
+                line = [word];
+                tspan = text.append("tspan")
+                            .attr("x", x)
+                            .attr("y", y)
+                            .attr("dy", ++lineNumber * lineHeight + dy + "em")
+                            .text(word);
+            }
+        }
+        
+        if (lineNumber > 0) {
+          const startDy = -(lineNumber * (lineHeight / 2));  // here was the issue
+          text
+            .selectAll("tspan")
+            .attr("dy", (d, i) => startDy + lineHeight * i + "em");
+        }
+    });
+}
+  
+  function ordinal_suffix_of(i) {
+      var j = i % 10,
+          k = i % 100;
+      if (j == 1 && k != 11) {
+          return i + "st";
+      }
+      if (j == 2 && k != 12) {
+          return i + "nd";
+      }
+      if (j == 3 && k != 13) {
+          return i + "rd";
+      }
+      return i + "th";
+  }
+  
+  function padScale (scale, padding) {
+    const doughmain = scale.domain();
+    if (!Array.isArray(padding) || typeof scale.invert !== 'function') {
+      return doughmain.slice();
+    }
+  
+    const paddedDomain = doughmain.slice();
+    const pl = padding.length;
+    for (let i = 0; i < pl; i++) {
+      const sign = i === 0 ? -1 : 1;
+      const isTime = Object.prototype.toString.call(doughmain[i]) === '[object Date]';
+  
+      const parts = [doughmain[i], scale.invert(padding[i]), scale.invert(0)].map(function(d) {
+        return isTime ? d.getTime() : d;
+      });
+      paddedDomain[i] = [parts[0] + Math.abs(parts[1] - parts[2]) * sign].map(function(d) {
+        return isTime ? new Date(d) : d;
+      })[0];
+    }
+    return paddedDomain;
+  };
+  
+  var color1 = "#99475f";
+  
+  drawChart3();
+  
+  function drawChart3() {
+    var div = d3.select("#bar3-container"),
+        divwidth = 750,
+        margin = { top: 185, right: 20, bottom: 53, left: 35 },
+        width = divwidth - margin.left - margin.right,
+        height = 435,
+        svg = div.append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+          .attr("role", "img")
+          .attr("aria-label", ""),
+        g = svg.append("g")
+          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+          
+    g.append("rect")
+      .attr("x", -margin.left)
+      .attr("y", -margin.top)
+      .attr("width", margin.left + width + margin.right)
+      .attr("height", margin.top + height + margin.bottom)
+      .style("fill", "#fff");
+          
+    g.append("text")
+      .attr("class", "title")
+      .attr("x", -margin.left)
+      .attr("y", -margin.top)
+      .attr("dy", 30)
+      .text("Views on gender equality regressed regardless of boys'");
+          
+    g.append("text")
+      .attr("class", "title")
+      .attr("x", -margin.left)
+      .attr("y", -margin.top)
+      .attr("dy", 65)
+      .text("relationships with parents");
+          
+    g.append("text")
+      .attr("class", "subtitle")
+      .attr("x", -margin.left)
+      .attr("y", -margin.top)
+      .attr("dy", 91)
+      .text("Percent of American 8th and 10th grade boys who completely agree that...");
+          
+    g.append("text")
+      .attr("class", "footnote")
+      .attr("x", -margin.left)
+      .attr("y", height + margin.bottom)
+      .attr("dy", -5)
+      .text("Chart: David Waldron, waldrn.com | Data: Monitoring the Future");
+          
+    d3.csv('mtf-gender-parent.csv', function(error, data) {
+      if (error) throw error;
+      
+      data.forEach(function(d) {
+        d.line = (+d.pct);
+        return(d);
+      });
+      
+      var dataNest = d3.nest()
+        .key(d => d.question)
+        .key(d => d.value)
+        .entries(data);
+        
+      var area = d3.area()
+        .x(vv => xScale(vv.year))
+        .y0(vv => yScale(vv.low))
+        .y1(vv => yScale(vv.upp));
+        
+      var line = d3.line()
+        .x(vv => xScale(vv.year))
+        .y(vv => yScale(vv.line));
+            
+      var paneScale = d3.scaleOrdinal()
+        .domain(["jobop","eqpay"])
+        .range([0,1]);
+        
+      var paneMargin = {
+        top: 0,
+        right: 50,
+        bottom: 0,
+        left: 0
+      }
+      
+      var paneWidth = width / paneScale.domain().length - paneMargin.right - paneMargin.left;
+            
+      var xScale = d3.scaleLinear()
+        .domain([1990,2024])
+        .rangeRound([0, paneWidth]);
+      
+      var yScale = d3.scaleLinear()
+        .domain([0,1])
+        .rangeRound([height, 0]);
+        
+      var yAxis = g.append("g")
+        .attr("class", "axis")
+        .call(d3.axisLeft(yScale)
+          .ticks(5)
+          .tickFormat(d3.format(".0%")));
+      yAxis.select(".domain").remove();
+      yAxis.selectAll(".tick")
+        .select("line")
+        .attr("x1", -margin.left)
+        .attr("x2", paneWidth)
+        .style("stroke", "#ccc");
+      yAxis.selectAll(".tick")
+        .append("line")
+        .attr("x1", paneMargin.left + paneWidth + paneMargin.right + paneMargin.left)
+        .attr("x2", paneMargin.left + paneWidth + paneMargin.right + paneMargin.left + paneWidth)
+        .style("stroke", "#ccc");
+      yAxis.selectAll(".tick")
+        .select("text")
+        .attr("x", -margin.left)
+        .attr("dy", -5)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .style("fill", "#777");
+    
+      var question = d3.scaleOrdinal()
+        .domain(["jobop","eqpay"])
+        .range(["A woman should have the same job","Men and women should be paid the"]);
+
+      var question2 = d3.scaleOrdinal()
+        .domain(["jobop","eqpay"])
+        .range(["opportunities as a man.","same money if they do the same work."]);
+    
+      var label = d3.scaleOrdinal()
+        .domain(["Yes","No"])
+        .range(["Can talk to parents about everything","Can't talk to parents about everything","Nothing"]);
+    
+      var color = d3.scaleOrdinal()
+        .domain(["Yes","No"])
+        .range(["#2d4c50","#397D77","#aaa"]);
+        
+      console.log(dataNest);
+        
+      var pane = g.selectAll("g.pane")
+        .data(dataNest)
+        .enter()
+        .append("g")
+        .attr("class", "pane")
+        .attr("transform", d => "translate(" + paneScale(d.key) * width / (paneScale.domain().length) + ",0)");
+      
+      pane.append("rect")
+        .attr("x", 0)
+        .attr("y", -73)
+        .attr("width", paneWidth)
+        .attr("height", 56)
+        .style("stroke", "#397D77")
+        .style("fill", "#397D77")
+        .style("fill-opacity", "0.05");
+      
+      pane.append("text")
+        .attr("x", 8)
+        .attr("y", -50)
+        .attr("text-anchor", "start")
+        .style("font-size", "16px")
+        .style("font-weight", 600)
+        .style("fill", "#333")
+        .text(d => question(d.key));
+        
+      pane.append("text")
+        .attr("x", 8)
+        .attr("y", -28)
+        .attr("text-anchor", "start")
+        .style("font-size", "16px")
+        .style("font-weight", 600)
+        .style("fill", "#333")
+        .text(d => question2(d.key));
+      
+      xAxis = pane.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(xScale)
+          .ticks(3)
+          .tickFormat(d3.format(".0f")));
+      xAxis.select(".domain").remove();
+      xAxis.selectAll(".tick")
+        .select("line")
+        .style("stroke", "#ddd");
+      xAxis.selectAll(".tick")
+        .select("text")
+        .style("font-size", "12px")
+        .style("fill", "#777");
+/*
+      agegrp.selectAll("circle")
+        .data(d => d.values)
+        .enter()
+        .append("circle")
+        .attr("r", 2.5)
+        .attr("cx", v => xScale(v.date2))
+        .attr("cy", v => yScale(v.percent))
+        .style("fill", v => color(v.agegrp))
+        .style("fill-opacity", 0.4)
+        .style("stroke", "none");
+*/
+      var series = pane.selectAll("g.line")
+        .data(d => d.values)
+        .enter()
+        .append("g")
+        .attr("class", "line");
+        
+      series.append("path")
+        .attr("fill", v => color(v.key))
+        .attr("fill-opacity", 0.2)
+        .datum(v => v.values)
+        .attr("d", area);
+        
+      series.append("path")
+        .attr("stroke", v => color(v.key))
+        .datum(v => v.values)
+        .attr("fill", "none")
+        .attr("stroke-linejoin", "round")
+        .attr("stroke-linecap", "round")
+        .attr("stroke-width", 3)
+        .attr("d", line);
+      
+      series.append("circle")
+        .attr("r", 4)
+        .attr("cx", v => xScale(d3.max(v.values, vv => vv.year)))
+        .attr("cy", v => yScale(v.values.filter(vv => vv.year === d3.max(v.values, vv => vv.year))[0].pct))
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1)
+        .attr("fill", v => color(v.key));
+      
+      series.append("text")
+        .attr("x", v => xScale(d3.max(v.values, vv => vv.year)) + 8)
+        .attr("y", v => yScale(v.values.filter(vv => vv.year === d3.max(v.values, vv => vv.year))[0].pct) + 4)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .style("fill", v => color(v.key))
+        .style("stroke", "none")
+        .text(v => d3.format(".0%")(v.values.filter(vv => vv.year === d3.max(v.values, vv => vv.year))[0].pct));
+      
+      series.filter(v => v.key === "Yes")
+        .append("text")
+        .attr("x", v => xScale(d3.max(v.values, vv => vv.year)) + 8)
+        .attr("y", v => yScale(v.values.filter(vv => vv.year === d3.max(v.values, vv => vv.year))[0].pct) - 13)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .style("font-weight", 700)
+        .style("fill", "#444")
+        .style("stroke", "none")
+        .text(v => d3.max(v.values, vv => vv.year));
+        
+      series.append("text")
+        .attr("x", paneWidth / 2)
+        .attr("y", v => yScale(v.values.filter(vv => vv.year === "2007")[0].pct) + (v.key === "No" ? +40 : -25))
+        .attr("text-anchor", "middle")
+        .style("font-size", "12px")
+        .style("font-weight", 700)
+        .style("fill", "#fff")
+        .style("stroke", "#fff")
+        .style("stroke-width", 4)
+        .text(v => label(v.key));
+        
+      series.append("text")
+        .attr("x", paneWidth / 2)
+        .attr("y", v => yScale(v.values.filter(vv => vv.year === "2007")[0].pct) + (v.key === "No" ? +40 : -25))
+        .attr("text-anchor", "middle")
+        .style("font-size", "12px")
+        .style("font-weight", 700)
+        .style("fill", v => color(v.key))
+        .style("stroke", "none")
+        .text(v => label(v.key));
+    });
+  };
+  </script>
+</body>
