@@ -411,10 +411,10 @@ fwrite(dt_mtf.sum.par2, here('d3','mtf-gender-parent.csv'))
 
 # Religion
 dt_mtf.sum.rlg <- svy_mtf %>%
-  filter(IRN_00030 == 1 & (oftdate != 'NA')) %>%
-  group_by(year, value = oftdate) %>%
+  filter(IRN_00030 == 1 & (religimp != 'NA')) %>%
+  group_by(year, value = religimp) %>%
   summarise(
-    variable = 'oftdate',
+    variable = 'religimp',
     N = sum(!is.na(IRN_07950) & IRN_07950 %in% 1:5),
     jobop = survey_ratio(IRN_07950 %in% 5, IRN_07950 %in% 1:5, vartype = c('ci')),
     eqpay = survey_ratio(IRN_07930 %in% 5, IRN_07930 %in% 1:5, vartype = c('ci'))
